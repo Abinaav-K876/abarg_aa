@@ -5,7 +5,7 @@ export default function chatApp() {
         // --- State ---
         user: null,
         token: api.getToken(),
-        view: 'loading', // loading, auth, app, settings, create_group
+        view: 'loading', // loading, auth, app
         authMode: 'login',
         currentTheme: localStorage.getItem('theme') || 'theme-light',
         
@@ -14,21 +14,20 @@ export default function chatApp() {
         allUsers: [],
         searchQuery: '',
         
-        // Active Chat & View
+        // Active Chat
         activeChat: null,
         messages: [],
         messageInput: '',
-        viewingUser: null, 
         
+        // Timers
+        msgInterval: null,
+        listInterval: null,
+
         // UI State
         showSidebar: true,
         showAttach: false,
         chatMenu: false,
         replyingTo: null,
-        typingUser: false, 
-        typingTimeout: null,
-        chatSearch: false,
-        chatSearchQuery: '',
         
         modals: {
             contacts: false,
@@ -41,21 +40,16 @@ export default function chatApp() {
         loginForm: { email: '', password: '' },
         regForm: { username: '', email: '', password: '' },
         groupForm: { name: '', selectedFriends: [] },
-        
-        // Socket
-        socket: null,
 
         // --- Init ---
         async init() {
-            // Apply theme immediately
             this.setTheme(this.currentTheme);
 
             if (this.token) {
                 try {
                     this.user = await api.get('/profile');
                     this.view = 'app';
-                    this.connectSocket();
-                    this.refreshData();
+                    this.startPolling();
                     this.loadAllUsers(); 
                 } catch (e) {
                     this.logout();
@@ -63,13 +57,104 @@ export default function chatApp() {
             } else {
                 this.view = 'auth';
             }
-            window.addEventListener('auth-error', () => this.logout());
         },
         
-        // --- Theme Logic ---
         setTheme(themeName) {
             this.currentTheme = themeName;
             localStorage.setItem('theme', themeName);
+        },
+
+        // --- Polling Logic ---
+        startPolling() {
+            // Initial Load
+            this.refreshChatList();
+            
+            // Poll Chat List (Unread counts, Last Msg) every 5s
+            this.listInterval = setInterval(() => this.refreshChatList(), 5000);
+            
+            // Poll Active Messages every 2s
+            this.msgInterval = setInterval(() => {
+                if(this.activeChat) {
+                    this.refreshMessages(true); // true = silent refresh
+                }
+            }, 2000);
+        },
+
+        stopPolling() {
+            if (this.listInterval) clearInterval(this.listInterval);
+            if (this.msgInterval) clearInterval(this.msgInterval);
+        },
+
+        async refreshChatList() {
+            try {
+                const [conversations, groups] = await Promise.all([
+                    api.get('/conversations'),
+                    api.get('/groups')
+                ]);
+                
+                // Map to unified format
+                const privateChats = conversations.map(c => ({
+                    id: c.user_id,
+                    name: c.username,
+                    image: c.profile_image,
+                    type: 'private',
+                    conversation_id: c.conversation_id, 
+                    online: c.is_online,
+                    last_seen: c.last_seen,
+                    last_msg: c.last_msg,
+                    last_msg_time: c.last_msg_time ? this.formatTime(c.last_msg_time) : '',
+                    unread: c.unread
+                }));
+                
+                const groupChats = groups.map(g => ({
+                    id: g.id,
+                    name: g.name,
+                    image: g.image_url,
+                    type: 'group',
+                    last_msg: 'GROUP_DATA',
+                    last_msg_time: '',
+                    unread: 0, // Server doesn't send unread for groups yet
+                    member_count: g.member_count,
+                    created_by: g.created_by
+                }));
+                
+                // Merge and Sort
+                this.chats = [...privateChats, ...groupChats].sort((a,b) => {
+                    // Sort by time desc
+                    const tA = a.last_msg_time || '';
+                    const tB = b.last_msg_time || '';
+                    return tA < tB ? 1 : -1;
+                });
+
+            } catch(e) { console.error("Poll Error:", e); }
+        },
+
+        async refreshMessages(silent = false) {
+            if (!this.activeChat) return;
+            const endpoint = this.activeChat.type === 'private' 
+                ? `/chat/history/${this.activeChat.conversation_id}`
+                : `/group-chat/history/${this.activeChat.id}`;
+            
+            try {
+                const msgs = await api.get(endpoint);
+                
+                // Check if new messages arrived
+                if (msgs.length > this.messages.length) {
+                    this.messages = msgs;
+                    if (!silent) this.scrollToBottom();
+                    else {
+                        // Only scroll if already near bottom? For now just auto-scroll
+                        // or check if user is scrolling up
+                        this.scrollToBottom();
+                    }
+                    
+                    // Mark last msg as read if it's not ours
+                    const last = msgs[msgs.length - 1];
+                    if(last && last.sender_id !== this.user.id && last.status !== 'read') {
+                        api.post('/chat/read', { message_id: last.id });
+                    }
+                }
+            } catch(e) { console.error("Msg Poll Error:", e); }
         },
 
         // --- Auth ---
@@ -90,96 +175,26 @@ export default function chatApp() {
             } catch (e) { alert(e.message); }
         },
 
-        logout() {
-            if (this.socket) this.socket.disconnect();
+        async logout() {
+            this.stopPolling();
+            try { await api.post('/logout', {}); } catch(e){}
             api.logout();
-        },
-
-        // --- Data ---
-        async refreshData() {
-            const [conversations, groups] = await Promise.all([
-                api.get('/conversations'),
-                api.get('/groups')
-            ]);
-            
-            const privateChats = conversations.map(c => ({
-                id: c.user_id,
-                name: c.username,
-                image: c.profile_image,
-                type: 'private',
-                conversation_id: c.conversation_id, 
-                online: c.is_online,
-                last_seen: c.last_seen,
-                last_msg: c.last_msg,
-                last_msg_time: c.last_msg_time ? this.formatTime(c.last_msg_time) : '',
-                unread: c.unread
-            }));
-            
-            const groupChats = groups.map(g => ({
-                id: g.id,
-                name: g.name,
-                image: g.image_url,
-                type: 'group',
-                last_msg: 'GROUP_DATA',
-                last_msg_time: '',
-                unread: 0,
-                member_count: g.member_count,
-                created_by: g.created_by
-            }));
-            
-            this.chats = [...privateChats, ...groupChats].sort((a,b) => {
-                return (b.last_msg_time > a.last_msg_time) ? 1 : -1;
-            });
-        },
-        
-        async loadAllUsers() {
-            try {
-                this.allUsers = await api.get('/users');
-            } catch(e) { console.error(e); }
-        },
-        
-        get filteredUsers() {
-            if (!this.searchQuery) return this.allUsers;
-            const q = this.searchQuery.toLowerCase();
-            return this.allUsers.filter(u => u.username.toLowerCase().includes(q));
-        },
-        
-        get filteredMessages() {
-            if (!this.chatSearch || !this.chatSearchQuery) return this.messages;
-            const q = this.chatSearchQuery.toLowerCase();
-            return this.messages.filter(m => 
-                (m.content && m.content.toLowerCase().includes(q)) || 
-                (m.sender_name && m.sender_name.toLowerCase().includes(q))
-            );
-        },
-        
-        getSortedChats() {
-            return this.chats;
-        },
-
-        isActive(chat) {
-            return this.activeChat && this.activeChat.id === chat.id && this.activeChat.type === chat.type;
         },
 
         // --- Chat Selection ---
         async startChatWith(user) {
+            // Check if exists
             let chat = this.chats.find(c => c.type === 'private' && c.id === user.id);
-            
             if (!chat) {
+                // Optimistic UI
                 chat = {
-                    id: user.id,
-                    name: user.username,
-                    image: user.profile_image,
-                    type: 'private',
-                    online: user.is_online,
-                    last_seen: user.last_seen,
-                    last_msg: 'NEW_LINK',
-                    unread: 0
+                    id: user.id, name: user.username, image: user.profile_image,
+                    type: 'private', online: user.is_online, last_seen: user.last_seen,
+                    last_msg: '', unread: 0
                 };
-                this.chats.unshift(chat); 
+                this.chats.unshift(chat);
             }
             this.modals.contacts = false;
-            this.modals.viewProfile = false; 
             this.selectChat(chat);
         },
 
@@ -188,74 +203,26 @@ export default function chatApp() {
             this.messages = [];
             this.showSidebar = window.innerWidth >= 768;
             this.replyingTo = null;
-            this.typingUser = false;
-            this.messageInput = '';
-            this.chatSearch = false; // Reset search
 
             if (chat.type === 'private') {
-                try {
-                    let chatId = chat.conversation_id;
-                    if (!chatId) {
-                        const res = await api.get(`/conversation-with/${chat.id}`);
-                        chatId = res.conversation_id;
-                        this.activeChat.conversation_id = chatId; 
-                    }
-                    
-                    this.socket.emit('join_private_chat', { conversation_id: chatId });
-                    await this.loadMessages(`/chat/history/${chatId}`);
-                } catch(e) {
-                    alert("LINK_FAILURE: " + e.message);
+                if (!chat.conversation_id) {
+                    const res = await api.get(`/conversation-with/${chat.id}`);
+                    chat.conversation_id = res.conversation_id;
                 }
+                await this.refreshMessages();
             } else {
-                this.socket.emit('join_group_chat', { group_id: chat.id });
-                await this.loadMessages(`/group-chat/history/${chat.id}`);
-                // Load role and members
-                const members = await api.get(`/groups/${chat.id}/members`);
-                this.activeChat.members = members;
-                const me = members.find(m => m.id === this.user.id);
-                this.activeChat.role = me ? me.role : 'member';
+                await this.refreshMessages();
+                // Load members logic if needed
+                try {
+                     const members = await api.get(`/groups/${chat.id}/members`);
+                     this.activeChat.members = members;
+                     const me = members.find(m => m.id === this.user.id);
+                     this.activeChat.role = me ? me.role : 'member';
+                } catch(e){}
             }
         },
 
-        async loadMessages(endpoint) {
-            this.messages = await api.get(endpoint);
-            this.scrollToBottom();
-        },
-        
-        // --- User Profile & Group Members ---
-        async viewUserProfile(userId) {
-            try {
-                this.viewingUser = await api.get(`/profile/${userId}`);
-                this.modals.viewProfile = true;
-            } catch (e) { alert(e.message); }
-        },
-        
-        async addMemberToGroup(userId) {
-            try {
-                 await api.post(`/groups/${this.activeChat.id}/add-member`, { user_id: userId });
-                 alert("NODE_ADDED.");
-                 this.modals.addMember = false;
-                 // Refresh members
-                 const members = await api.get(`/groups/${this.activeChat.id}/members`);
-                 this.activeChat.members = members;
-            } catch(e) { alert(e.message); }
-        },
-
         // --- Messaging ---
-        handleTyping() {
-            if (this.typingTimeout) clearTimeout(this.typingTimeout);
-            
-            const payload = this.activeChat.type === 'private' 
-                ? { conversation_id: this.activeChat.conversation_id }
-                : { group_id: this.activeChat.id };
-            
-            this.socket.emit('typing', payload);
-            
-            this.typingTimeout = setTimeout(() => {
-                this.socket.emit('stop_typing', payload);
-            }, 2000);
-        },
-
         startReply(msg) {
             this.replyingTo = msg;
             document.querySelector('input[type="text"]')?.focus();
@@ -264,10 +231,11 @@ export default function chatApp() {
         async sendMessage() {
             if (!this.messageInput.trim()) return;
             
-            const tempId = 'temp_' + Date.now();
             const content = this.messageInput;
+            const tempId = 'temp_' + Date.now();
             
-            this.messages.push({
+            // Optimistic UI Update
+            const optimisticMsg = {
                 id: tempId,
                 sender_id: this.user.id,
                 sender_name: this.user.username,
@@ -279,20 +247,34 @@ export default function chatApp() {
                     sender_name: this.replyingTo.sender_name,
                     content: this.replyingTo.content
                 } : null
-            });
+            };
+            this.messages.push(optimisticMsg);
             this.scrollToBottom();
             
             const payload = {
                 content: content,
                 reply_to_id: this.replyingTo?.id,
-                client_temp_id: tempId
+                conversation_id: this.activeChat.type === 'private' ? this.activeChat.conversation_id : null,
+                group_id: this.activeChat.type === 'group' ? this.activeChat.id : null
             };
-            
-            this.sendPayload(payload);
+
+            try {
+                const res = await api.post('/chat/send', payload);
+                // Update ID and Status
+                const idx = this.messages.findIndex(m => m.id === tempId);
+                if (idx !== -1) {
+                    this.messages[idx].id = res.id;
+                    this.messages[idx].status = 'sent';
+                }
+            } catch (e) {
+                alert("Failed to send: " + e.message);
+                this.messages = this.messages.filter(m => m.id !== tempId);
+            }
+
             this.messageInput = '';
             this.replyingTo = null;
         },
-
+        
         async uploadFile(e, type='image') {
             const file = e.target.files[0];
             if (!file) return;
@@ -301,152 +283,28 @@ export default function chatApp() {
             try {
                 const res = await api.upload('/upload-file', file, 'file');
                 let msgType = res.type || 'file'; 
-                if (type === 'audio') msgType = 'audio';
-
-                const tempId = 'temp_' + Date.now();
-                this.messages.push({
-                    id: tempId,
-                    sender_id: this.user.id,
-                    sender_name: this.user.username,
-                    sender_dp: this.user.profile_image,
+                
+                const payload = {
                     file_url: res.url,
                     type: msgType,
-                    timestamp: new Date().toISOString(),
-                    status: 'sending'
-                });
-                this.scrollToBottom();
-
-                this.sendPayload({
-                    file_url: res.url,
-                    type: msgType,
-                    client_temp_id: tempId
-                });
+                    conversation_id: this.activeChat.type === 'private' ? this.activeChat.conversation_id : null,
+                    group_id: this.activeChat.type === 'group' ? this.activeChat.id : null
+                };
+                
+                await api.post('/chat/send', payload);
+                this.refreshMessages(true); // Immediate refresh
+                
             } catch (err) {
-                console.error(err);
                 alert("UPLOAD_FAILED");
             }
         },
 
-        sendPayload(data) {
-            if (this.activeChat.type === 'private') {
-                data.conversation_id = this.activeChat.conversation_id;
-            } else {
-                data.group_id = this.activeChat.id;
-            }
-            this.socket.emit('send_message', data);
-        },
-        
-        async clearChat() {
-            if(!confirm('CONFIRM_PURGE: DELETE ALL MESSAGES?')) return;
-            try {
-                const url = `/chat/clear/${this.activeChat.type}/${this.activeChat.type === 'group' ? this.activeChat.id : this.activeChat.conversation_id}`;
-                await api.delete(url);
-                this.messages = [];
-                alert("LOGS_PURGED.");
-            } catch (e) {
-                alert("ERROR: " + e.message);
-            }
-        },
-
-        async deleteChat() {
-            if(!confirm('TERMINATE_LINK?')) return;
-            const url = this.activeChat.type === 'group' ? 
-                `/groups/${this.activeChat.id}/delete` : 
-                `/chat/delete/${this.activeChat.conversation_id}`;
-            await api.delete(url);
-            this.activeChat = null;
-            this.refreshData();
-        },
-
-        // --- Socket ---
-        connectSocket() {
-            this.socket = window.io(window.location.origin, { 
-                query: { token: this.token },
-                transports: ['websocket'] 
-            });
-
-            this.socket.on('new_message', (msg) => this.handleIncoming(msg));
-            this.socket.on('new_group_message', (msg) => this.handleIncoming(msg));
-            
-            this.socket.on('typing', () => { this.typingUser = true; });
-            this.socket.on('stop_typing', () => { this.typingUser = false; });
-            
-            this.socket.on('message_read', (data) => {
-                const msg = this.messages.find(m => m.id === data.message_id);
-                if (msg) msg.status = 'read';
-            });
-
-            this.socket.on('user_status', (data) => {
-                const user = this.allUsers.find(u => u.id === data.user_id);
-                if(user) {
-                     user.is_online = (data.status === 'online');
-                     if(data.last_seen) user.last_seen = data.last_seen;
-                }
-                const chat = this.chats.find(c => c.type === 'private' && c.id === data.user_id);
-                if (chat) {
-                    if (data.status === 'online') chat.online = true;
-                    else {
-                        chat.online = false;
-                        chat.last_seen = data.last_seen;
-                    }
-                }
-            });
-        },
-
-        handleIncoming(msg) {
-            if (msg.client_temp_id) {
-                const idx = this.messages.findIndex(m => m.id === msg.client_temp_id);
-                if (idx !== -1) {
-                    this.messages[idx] = msg;
-                    return;
-                }
-            }
-
-            let belongs = false;
-            if (this.activeChat) {
-                if (this.activeChat.type === 'private' && !msg.group_id && (msg.sender_id === this.activeChat.id || msg.sender_id === this.user.id)) belongs = true;
-                if (this.activeChat.type === 'group' && msg.group_id === this.activeChat.id) belongs = true;
-            }
-
-            if (belongs) {
-                if (!this.messages.find(m => m.id === msg.id)) {
-                    this.messages.push(msg);
-                    this.scrollToBottom();
-                }
-                if (msg.sender_id !== this.user.id) {
-                     this.socket.emit('mark_read', { message_id: msg.id });
-                }
-            } else {
-                const existing = this.chats.find(c => (c.type === 'private' && c.id === msg.sender_id) || (c.type === 'group' && c.id === msg.group_id));
-                if (existing) {
-                    existing.unread = (existing.unread || 0) + 1;
-                    existing.last_msg = msg.content || 'MEDIA_DATA';
-                    existing.last_msg_time = this.formatTime(msg.timestamp);
-                } else {
-                    this.refreshData(); 
-                }
-            }
-        },
-
+        // --- Helpers ---
         scrollToBottom() {
             this.$nextTick(() => {
                 const container = document.getElementById('messages-container');
                 if (container) container.scrollTop = container.scrollHeight;
             });
-        },
-        
-        scrollToMsg(id) {
-             // Logic to find element by ID and scroll
-        },
-        
-        openChatInfo() {
-             if(this.activeChat.type === 'group') this.modals.groupMembers = true;
-             else this.viewUserProfile(this.activeChat.id);
-        },
-
-        // --- Utils ---
-        avatar(url, name) {
-            return url || `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'User')}&background=000&color=0F0&font-size=0.5`;
         },
         
         formatTime(iso) {
@@ -455,7 +313,22 @@ export default function chatApp() {
             return d.toLocaleTimeString([], {hour12: false, hour: '2-digit', minute:'2-digit'});
         },
         
-        // --- Group & Actions ---
+        avatar(url, name) {
+            return url || `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'User')}&background=000&color=0F0&font-size=0.5`;
+        },
+        
+        // --- Other Data ---
+        async loadAllUsers() {
+            try { this.allUsers = await api.get('/users'); } catch(e){}
+        },
+        
+        get filteredUsers() {
+            if (!this.searchQuery) return this.allUsers;
+            const q = this.searchQuery.toLowerCase();
+            return this.allUsers.filter(u => u.username.toLowerCase().includes(q));
+        },
+        
+        // --- Group Actions ---
         toggleFriendSelection(id) {
             if (this.groupForm.selectedFriends.includes(id)) {
                 this.groupForm.selectedFriends = this.groupForm.selectedFriends.filter(x => x !== id);
@@ -472,13 +345,15 @@ export default function chatApp() {
                     member_ids: this.groupForm.selectedFriends
                 });
                 this.view = 'app';
-                this.refreshData();
+                this.refreshChatList();
             } catch (e) { alert(e.message); }
         },
         
-        viewMedia(url) {
-            window.open(url, '_blank');
-        },
+        viewMedia(url) { window.open(url, '_blank'); },
         
+        openChatInfo() {
+             if(this.activeChat.type === 'group') this.modals.groupMembers = true;
+             else this.modals.viewProfile = true; 
+        }
     }
 }
