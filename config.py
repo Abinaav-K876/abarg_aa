@@ -12,13 +12,13 @@ class Config:
     SQLALCHEMY_DATABASE_URI = uri
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    # Critical for Supabase stability on Railway
+    # Optimized for Render PostgreSQL stability
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_pre_ping": True,
         "pool_recycle": 280,
     }
 
-    # Mail & Supabase
+    # Mail & Supabase Storage
     MAIL_SERVER = 'smtp.gmail.com'
     MAIL_PORT = 587
     MAIL_USE_TLS = True
