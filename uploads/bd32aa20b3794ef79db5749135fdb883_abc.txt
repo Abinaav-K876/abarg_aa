@@ -1,0 +1,44 @@
+[INFO] System initialized successfully
+[21:54:23] ✅ Camera initialized (1280x720)
+[21:54:24] ✅ AI model loaded: best.pt
+[21:54:48] 📡 Selected drone: GS-DRONE-ALPHA
+[21:54:51] 🚀 GS-DRONE-ALPHA: Armed
+[21:54:55] ⬆️ GS-DRONE-ALPHA: Takeoff initiated (Alt: 10m)
+[21:54:59] ⬇️ GS-DRONE-ALPHA: Landing initiated
+[21:55:16] 🏠 GS-DRONE-ALPHA: Return to home command sent
+[21:55:21] 📡 Selected drone: GS-DRONE-BETA
+[21:55:21] 📡 Selected drone: GS-DRONE-ALPHA
+[21:55:22] 🎯 AI detection enabled for GS-DRONE-ALPHA
+[21:55:44] ⚠️ Water log detected (0.41)
+[21:55:44] ⚠️ Water log detected (0.39)
+[21:55:45] ⚠️ Water log detected (0.44)
+[21:55:45] ⚠️ Water log detected (0.30)
+[21:55:47] ⚠️ Water log detected (0.34)
+[21:55:49] ⚠️ Water log detected (0.38)
+[21:55:50] ⚠️ Water log detected (0.41)
+[21:55:50] ⚠️ Water log detected (0.35)
+[21:55:50] ⚠️ Water log detected (0.35)
+[21:55:51] ⚠️ Water log detected (0.31)
+[21:55:51] ⚠️ Water log detected (0.30)
+[21:55:52] ⚠️ Water log detected (0.32)
+[21:55:52] ⚠️ Water log detected (0.31)
+[21:55:53] ⚠️ Water log detected (0.32)
+[21:55:53] ⚠️ Water log detected (0.34)
+[21:55:53] ⚠️ Water log detected (0.30)
+[21:55:54] ⚠️ Water log detected (0.34)
+[21:55:54] ⚠️ Water log detected (0.34)
+[21:55:55] ⚠️ Water log detected (0.31)
+[21:55:55] ⚠️ Water log detected (0.34)
+[21:55:55] ⚠️ Water log detected (0.33)
+[21:55:56] ⚠️ Water log detected (0.32)
+[21:55:56] ⚠️ Water log detected (0.31)
+[21:55:56] ⚠️ Water log detected (0.32)
+[21:55:58] 🔍 AI detection disabled
+[21:56:02] 📊 Telemetry for GS-DRONE-ALPHA:
+[21:56:02]    Altitude: 0m | Speed: 0m/s
+[21:56:02]    Battery: 92% | Link: 100%
+[21:56:02]    Location: Main Campus Roof | Status: In Flight
+[21:56:34] 📸 Frame captured: capture_GS-DRONE-ALPHA_20251219_215634.jpg
+[21:57:13] 📁 Log exported: C:/Users/123/PycharmProjects/PythonProject/ipropler technologies/USER app/abc.txt
+[21:57:51] ⏸ Stream paused
+[21:57:59] ▶️ Stream resumed

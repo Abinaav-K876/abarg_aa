@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ABARG // TERMINAL</title>
+    
+    <!-- Matrix Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
+
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        mono: ['"Share Tech Mono"', 'monospace'],
+                        matrix: ['"VT323"', 'monospace'],
+                    },
+                    colors: {
+                        matrix: {
+                            bg: 'var(--color-bg)',
+                            base: 'var(--color-base)',
+                            text: 'var(--color-text)',
+                            dim: 'var(--color-dim)',
+                            dark: 'var(--color-dark)',
+                            highlight: 'var(--color-highlight)',
+                            error: 'var(--color-error)'
+                        }
+                    },
+                    boxShadow: {
+                        'glow': '0 0 10px var(--color-glow), 0 0 20px var(--color-glow-dim)',
+                        'screen': 'inset 0 0 100px rgba(0, 0, 0, 0.9)',
+                    },
+                    animation: {
+                        'scanline': 'scanline 8s linear infinite',
+                        'flicker': 'flicker 0.15s infinite',
+                        'typing': 'typing 3s steps(40, end)',
+                        'blink-caret': 'blink-caret .75s step-end infinite',
+                        'glitch': 'glitch 1s linear infinite',
+                        'slide-in': 'slideIn 0.3s ease-out forwards',
+                    },
+                    keyframes: {
+                        scanline: {
+                            '0%': { transform: 'translateY(-100%)' },
+                            '100%': { transform: 'translateY(100%)' }
+                        },
+                        flicker: {
+                            '0%': { opacity: '0.97' },
+                            '5%': { opacity: '0.9' },
+                            '10%': { opacity: '0.97' },
+                            '100%': { opacity: '0.99' }
+                        },
+                        typing: {
+                            'from': { width: '0' },
+                            'to': { width: '100%' }
+                        },
+                        'blink-caret': {
+                            'from, to': { borderColor: 'transparent' },
+                            '50%': { borderColor: 'var(--color-text)' },
+                        },
+                        glitch: {
+                            '2%, 64%': { transform: 'translate(2px,0) skew(0deg)' },
+                            '4%, 60%': { transform: 'translate(-2px,0) skew(0deg)' },
+                            '62%': { transform: 'translate(0,0) skew(5deg)' }
+                        },
+                        slideIn: {
+                            '0%': { transform: 'translateX(20px)', opacity: '0' },
+                            '100%': { transform: 'translateX(0)', opacity: '1' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Socket & Logic -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script type="module">
+        import chatApp from './static/js/app.js';
+        window.chatApp = chatApp;
+    </script>
+    <!-- Alpine -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
+    
+    <link rel="stylesheet" href="static/css/styles.css">
+    
+    <!-- Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <style>
+        /* CSS Variables for Themes */
+        :root {
+            /* Default: Matrix Green */
+            --color-bg: #000000;
+            --color-base: #051005;
+            --color-text: #00FF41;
+            --color-dim: #008F11;
+            --color-dark: #003B00;
+            --color-highlight: #D1FFD7;
+            --color-error: #FF003C;
+            --color-glow: rgba(0, 255, 65, 0.5);
+            --color-glow-dim: rgba(0, 255, 65, 0.3);
+        }
+
+        .theme-matrix-red {
+            --color-bg: #000000;
+            --color-base: #100505;
+            --color-text: #FF003C;
+            --color-dim: #8F0011;
+            --color-dark: #3B0000;
+            --color-highlight: #FFD1D7;
+            --color-error: #00FF41;
+            --color-glow: rgba(255, 0, 60, 0.5);
+            --color-glow-dim: rgba(255, 0, 60, 0.3);
+        }
+
+        .theme-matrix-blue {
+            --color-bg: #000000;
+            --color-base: #050510;
+            --color-text: #00E5FF;
+            --color-dim: #00608F;
+            --color-dark: #00153B;
+            --color-highlight: #D1F7FF;
+            --color-error: #FF003C;
+            --color-glow: rgba(0, 229, 255, 0.5);
+            --color-glow-dim: rgba(0, 229, 255, 0.3);
+        }
+        
+        .theme-cyberpunk {
+            --color-bg: #0b0014;
+            --color-base: #1a002e;
+            --color-text: #ff00ff;
+            --color-dim: #9d00ff;
+            --color-dark: #4d0080;
+            --color-highlight: #00ffff;
+            --color-error: #ff3333;
+            --color-glow: rgba(255, 0, 255, 0.6);
+            --color-glow-dim: rgba(0, 255, 255, 0.4);
+        }
+
+        .theme-light {
+            --color-bg: #F5F5DC; /* Cream / Beige */
+            --color-base: #E8E8C8; /* Darker Beige */
+            --color-text: #2C1B18; /* Dark Warm Brown - High Contrast */
+            --color-dim: #6F4E37; /* Coffee */
+            --color-dark: #BDB76B; /* Khaki */
+            --color-highlight: #4B3621;
+            --color-error: #800000;
+            --color-glow: rgba(75, 54, 33, 0.1);
+            --color-glow-dim: rgba(75, 54, 33, 0.05);
+        }
+        
+        .theme-dark {
+            --color-bg: #121212;
+            --color-base: #1e1e1e;
+            --color-text: #e0e0e0;
+            --color-dim: #888888;
+            --color-dark: #333333;
+            --color-highlight: #ffffff;
+            --color-error: #ff4444;
+            --color-glow: rgba(255, 255, 255, 0.1);
+            --color-glow-dim: rgba(255, 255, 255, 0.05);
+        }
+
+        body {
+            background-color: var(--color-bg);
+            color: var(--color-text);
+            overflow: hidden;
+            text-shadow: 0 0 2px var(--color-dim);
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        /* CRT Effect (Only for Matrix themes) */
+        body:not(.theme-light):not(.theme-dark).crt::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 50;
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+        }
+        
+        .scanline {
+            width: 100%; height: 100px; z-index: 50;
+            background: linear-gradient(0deg, rgba(0,0,0,0) 0%, rgba(255, 255, 255, 0.04) 50%, rgba(0,0,0,0) 100%);
+            opacity: 0.1;
+            position: absolute; bottom: 100%;
+            animation: scanline 10s linear infinite;
+            pointer-events: none;
+        }
+        
+        body.theme-light .scanline, body.theme-dark .scanline { display: none; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--color-bg); border-left: 1px solid var(--color-dark); }
+        ::-webkit-scrollbar-thumb { background: var(--color-dim); border: 1px solid var(--color-bg); }
+        ::-webkit-scrollbar-thumb:hover { background: var(--color-text); }
+
+        .terminal-border {
+            border: 1px solid var(--color-dim);
+            position: relative;
+        }
+        .terminal-border::after {
+            content: '';
+            position: absolute;
+            top: -1px; left: -1px; right: -1px; bottom: -1px;
+            box-shadow: 0 0 5px var(--color-glow);
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .matrix-btn {
+            background: var(--color-bg);
+            border: 1px solid var(--color-text);
+            color: var(--color-text);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            transition: all 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+        .matrix-btn:hover {
+            background: var(--color-text);
+            color: var(--color-bg);
+            box-shadow: 0 0 15px var(--color-text);
+            text-shadow: none;
+        }
+        
+        .matrix-input {
+            background: var(--color-bg);
+            border: 1px solid var(--color-dark);
+            color: var(--color-text);
+            font-family: 'Share Tech Mono', monospace;
+        }
+        .matrix-input:focus {
+            border-color: var(--color-text);
+            outline: none;
+            box-shadow: 0 0 8px var(--color-glow-dim);
+        }
+
+        [x-cloak] { display: none !important; }
+        
+        .typewriter h1 {
+            overflow: hidden;
+            border-right: .15em solid var(--color-text);
+            white-space: nowrap;
+            margin: 0 auto;
+            animation: typing 3.5s steps(30, end), blink-caret .75s step-end infinite;
+        }
+    </style>
+</head>
+<body class="font-mono bg-matrix-bg crt selection:bg-matrix-text selection:text-matrix-bg h-screen supports-[height:100dvh]:h-[100dvh] w-screen overflow-hidden flex flex-col text-2xl" x-data="chatApp()" :class="currentTheme" x-cloak>
+    
+    <div class="scanline"></div>
+
+    <!-- LOADING -->
+    <div x-show="view === 'loading'" class="flex items-center justify-center h-full flex-col bg-matrix-bg z-50 fixed inset-0">
+        <div class="text-matrix-text text-xl mb-4 typewriter">
+            <h1>INITIALIZING CONNECTION...</h1>
+        </div>
+        <div class="w-64 h-2 border border-matrix-dim p-0.5">
+            <div class="h-full bg-matrix-text animate-[typing_2s_steps(20)_infinite]"></div>
+        </div>
+        <p class="text-matrix-dim text-xs mt-2 font-matrix uppercase tracking-widest">Encrypting Packet Stream</p>
+    </div>
+
+    <!-- AUTH SCREEN -->
+    <div x-show="view === 'auth'" class="flex items-center justify-center h-full w-full overflow-y-auto">
+        <div class="w-full max-w-lg terminal-border p-8 bg-matrix-bg/90 shadow-glow relative my-auto animate-slide-in z-[60]">
+            <div class="absolute top-0 left-0 bg-matrix-text text-matrix-bg px-2 text-xs font-bold">SYSTEM_AUTH</div>
+            
+            <div class="mb-10 text-center">
+                <i class="ri-terminal-box-fill text-6xl text-matrix-text mb-4 animate-pulse"></i>
+                <h1 class="text-4xl font-matrix tracking-widest text-matrix-text hover:animate-glitch cursor-default">ABARG_NET</h1>
+                <p class="text-matrix-dim text-sm mt-2">> SECURE_MESSAGING_PROTOCOL_V2.0</p>
+            </div>
+
+            <!-- Login -->
+            <div x-show="authMode === 'login'" class="space-y-6">
+                <div class="group relative">
+                    <label class="text-xs text-matrix-dim uppercase absolute -top-2 left-3 bg-matrix-bg px-1">Identity (Email)</label>
+                    <input x-model="loginForm.email" type="email" class="w-full matrix-input px-4 py-3 text-lg" placeholder="user@net.local">
+                </div>
+                <div class="group relative">
+                    <label class="text-xs text-matrix-dim uppercase absolute -top-2 left-3 bg-matrix-bg px-1">Passkey</label>
+                    <input x-model="loginForm.password" type="password" class="w-full matrix-input px-4 py-3 text-lg" placeholder="********">
+                </div>
+                <button @click="login()" class="w-full matrix-btn py-4 font-bold text-lg">
+                    > ACCESS_SYSTEM
+                </button>
+                <div class="text-center mt-4">
+                     <span class="text-matrix-dark text-sm">[NO_ID_FOUND?]</span> 
+                     <a @click="authMode = 'register'" class="text-matrix-text hover:underline cursor-pointer ml-2 decoration-dotted">INIT_REGISTRATION</a>
+                </div>
+            </div>
+
+            <!-- Register -->
+            <div x-show="authMode === 'register'" class="space-y-6">
+                <div class="group relative">
+                    <label class="text-xs text-matrix-dim uppercase absolute -top-2 left-3 bg-matrix-bg px-1">Designation (User)</label>
+                    <input x-model="regForm.username" name="username" type="text" class="w-full matrix-input px-4 py-3 text-lg" placeholder="Create Username" autocomplete="off">
+                </div>
+                <div class="group relative">
+                    <label class="text-xs text-matrix-dim uppercase absolute -top-2 left-3 bg-matrix-bg px-1">Identity (Email)</label>
+                    <input x-model="regForm.email" name="email" type="email" class="w-full matrix-input px-4 py-3 text-lg" placeholder="user@example.com" autocomplete="off">
+                </div>
+                <div class="group relative">
+                    <label class="text-xs text-matrix-dim uppercase absolute -top-2 left-3 bg-matrix-bg px-1">Passkey</label>
+                    <input x-model="regForm.password" name="password" type="password" class="w-full matrix-input px-4 py-3 text-lg" placeholder="Create Password" autocomplete="new-password">
+                </div>
+                <button @click="register()" class="w-full matrix-btn py-4 font-bold text-lg">
+                    > CREATE_ENTRY
+                </button>
+                <div class="text-center mt-4">
+                     <a @click="authMode = 'login'" class="text-matrix-dim hover:text-matrix-text cursor-pointer uppercase text-sm">< BACK_TO_LOGIN</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN APP -->
+    <div x-show="view === 'app'" class="flex-1 flex w-full relative border-t-2 border-matrix-text overflow-hidden animate-slide-in">
+        
+        <!-- SIDEBAR -->
+        <div :class="{'hidden': !showSidebar, 'flex': showSidebar}" class="w-full md:w-[400px] flex-col border-r border-matrix-dark h-full absolute md:relative z-20 bg-matrix-bg transition-all duration-300">
+            
+            <!-- User Info -->
+            <div class="h-24 border-b border-matrix-dark flex items-center justify-between px-4 bg-matrix-base flex-shrink-0">
+                <div class="flex items-center gap-3 overflow-hidden" @click="view = 'settings'">
+                    <div class="relative w-12 h-12 border border-matrix-text p-0.5 flex-shrink-0">
+                         <img :src="avatar(user?.profile_image, user?.username)" class="w-full h-full grayscale hover:grayscale-0 transition object-cover">
+                         <div class="absolute -bottom-1 -right-1 w-3 h-3 bg-matrix-text shadow-[0_0_5px_var(--color-text)]"></div>
+                    </div>
+                    <div class="min-w-0">
+                        <h2 class="text-matrix-text font-bold tracking-wider text-xl truncate cursor-pointer hover:text-matrix-highlight transition" x-text="user?.username"></h2>
+                        <p class="text-xs text-matrix-dim animate-pulse">● ONLINE</p>
+                    </div>
+                </div>
+                <div class="flex gap-2 flex-shrink-0">
+                    <button @click="modals.contacts = true; loadAllUsers()" class="w-10 h-10 border border-matrix-dim text-matrix-dim hover:text-black hover:bg-matrix-text transition flex items-center justify-center" title="New Comms"><i class="ri-add-box-line text-xl"></i></button>
+                    <button @click="logout()" class="w-10 h-10 border border-matrix-dim text-matrix-dim hover:text-black hover:bg-matrix-error transition flex items-center justify-center" title="Disconnect"><i class="ri-shut-down-line text-xl"></i></button>
+                </div>
+            </div>
+
+            <!-- Action Bar -->
+            <div class="grid grid-cols-2 border-b border-matrix-dark">
+                <button @click="view = 'settings'" class="py-3 text-sm border-r border-matrix-dark hover:bg-matrix-dim hover:text-matrix-bg uppercase transition font-bold">CONFIG</button>
+                <button @click="view = 'create_group'; loadAllUsers()" class="py-3 text-sm hover:bg-matrix-dim hover:text-matrix-bg uppercase transition font-bold">NEW_GROUP</button>
+            </div>
+
+            <!-- Filter -->
+            <div class="p-3 border-b border-matrix-dark flex-shrink-0">
+                <input type="text" placeholder="FILTER_LOGS..." class="w-full bg-matrix-bg border border-matrix-dark text-matrix-text text-lg p-3 focus:border-matrix-text focus:outline-none placeholder-matrix-dark font-matrix">
+            </div>
+
+            <!-- Chat List -->
+            <div class="flex-1 overflow-y-auto">
+                <!-- Group Networks -->
+                <div x-show="chats.filter(c => c.type === 'group').length > 0">
+                    <div class="px-4 py-2 text-xs font-bold text-matrix-dim border-b border-matrix-dark bg-matrix-base/50 tracking-widest">>> GROUP_NETWORKS</div>
+                    <template x-for="chat in chats.filter(c => c.type === 'group')" :key="chat.id">
+                        <div @click="selectChat(chat)" class="flex items-center gap-3 p-3 border-b border-matrix-dark/50 cursor-pointer hover:bg-matrix-dark/30 transition group"
+                             :class="isActive(chat) ? 'bg-matrix-dark/50 border-l-4 border-l-matrix-text' : 'border-l-4 border-l-transparent'">
+                            
+                            <div class="w-10 h-10 border border-matrix-dim flex-shrink-0 relative overflow-hidden">
+                                 <img :src="avatar(chat.image, chat.name)" class="w-full h-full grayscale group-hover:contrast-150 transition object-cover">
+                            </div>
+                            
+                            <div class="flex-1 min-w-0">
+                                <div class="flex justify-between items-baseline">
+                                    <h3 class="text-xl font-bold text-matrix-text truncate uppercase group-hover:text-matrix-highlight transition" x-text="chat.name"></h3>
+                                    <span class="text-xs text-matrix-dim" x-text="chat.last_msg_time"></span>
+                                </div>
+                                <div class="flex justify-between items-center mt-1">
+                                    <p class="text-sm text-matrix-dim truncate font-matrix w-48 group-hover:text-matrix-text transition" x-text="chat.last_msg || 'NO_DATA'"></p>
+                                    <span x-show="chat.unread > 0" class="px-2 py-0.5 bg-matrix-text text-matrix-bg text-xs font-bold shadow-[0_0_5px_var(--color-text)]" x-text="chat.unread"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Direct Messages -->
+                <div x-show="chats.filter(c => c.type === 'private').length > 0">
+                    <div class="px-4 py-2 text-xs font-bold text-matrix-dim border-b border-matrix-dark bg-matrix-base/50 tracking-widest mt-2">>> DIRECT_MESSAGES</div>
+                    <template x-for="chat in chats.filter(c => c.type === 'private')" :key="chat.id">
+                        <div @click="selectChat(chat)" class="flex items-center gap-3 p-3 border-b border-matrix-dark/50 cursor-pointer hover:bg-matrix-dark/30 transition group"
+                             :class="isActive(chat) ? 'bg-matrix-dark/50 border-l-4 border-l-matrix-text' : 'border-l-4 border-l-transparent'">
+                            
+                            <div class="w-10 h-10 border border-matrix-dim flex-shrink-0 relative overflow-hidden">
+                                 <img :src="avatar(chat.image, chat.name)" class="w-full h-full grayscale group-hover:contrast-150 transition object-cover">
+                            </div>
+                            
+                            <div class="flex-1 min-w-0">
+                                <div class="flex justify-between items-baseline">
+                                    <h3 class="text-xl font-bold text-matrix-text truncate uppercase group-hover:text-matrix-highlight transition" x-text="chat.name"></h3>
+                                    <span class="text-xs text-matrix-dim" x-text="chat.last_msg_time"></span>
+                                </div>
+                                <div class="flex justify-between items-center mt-1">
+                                    <p class="text-sm text-matrix-dim truncate font-matrix w-48 group-hover:text-matrix-text transition" x-text="chat.last_msg || 'NO_DATA'"></p>
+                                    <span x-show="chat.unread > 0" class="px-2 py-0.5 bg-matrix-text text-matrix-bg text-xs font-bold shadow-[0_0_5px_var(--color-text)]" x-text="chat.unread"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <!-- CHAT INTERFACE -->
+        <div class="flex-1 flex flex-col h-full relative bg-matrix-bg overflow-hidden transition-colors duration-300" :class="{'hidden': showSidebar && window.innerWidth < 768}">
+            
+            <!-- Default Screen -->
+            <div x-show="!activeChat" class="absolute inset-0 flex flex-col items-center justify-center text-center opacity-30 select-none">
+                <div class="border-2 border-matrix-dim p-8 animate-[pulse_4s_infinite]">
+                    <h1 class="text-4xl font-matrix mb-2">AWAITING_INPUT</h1>
+                    <p class="text-sm text-matrix-dim blink-caret">> SELECT_TARGET_FROM_SIDEBAR_</p>
+                </div>
+            </div>
+
+            <!-- Header -->
+            <template x-if="activeChat">
+                <div class="h-24 border-b border-matrix-text flex flex-col justify-center px-6 bg-matrix-base z-10 flex-shrink-0 relative">
+                    
+                    <div class="flex items-center justify-between">
+                        <!-- Chat Info -->
+                        <div class="flex items-center gap-6 cursor-pointer" @click="openChatInfo()">
+                            <button @click="showSidebar = true" class="md:hidden text-matrix-text"><i class="ri-arrow-left-line text-3xl"></i></button>
+                            <div class="w-12 h-12 border border-matrix-text p-0.5 relative group">
+                                 <img :src="avatar(activeChat.image, activeChat.name)" class="w-full h-full grayscale object-cover">
+                                 <div class="absolute inset-0 bg-matrix-text/20 hidden group-hover:block"></div>
+                            </div>
+                            <div>
+                                <h3 class="text-2xl font-bold text-matrix-text tracking-widest uppercase hover:text-matrix-highlight transition" x-text="activeChat.name"></h3>
+                                <p class="text-sm text-matrix-dim font-matrix uppercase tracking-wider">
+                                    <span x-show="typingUser" class="animate-pulse">> UPLOADING_DATA...</span>
+                                    <span x-show="!typingUser" x-text="activeChat.online ? 'STATUS: CONNECTED' : 'STATUS: OFFLINE'"></span>
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <!-- Settings Menu -->
+                        <div class="relative" x-data="{ open: false }">
+                            <button @click="open = !open" class="text-matrix-text hover:text-white transition p-2 border border-transparent hover:border-matrix-dim"><i class="ri-settings-3-fill text-2xl"></i></button>
+                            
+                            <!-- Control Panel -->
+                            <div x-show="open" @click.outside="open = false" class="absolute right-0 top-14 w-72 bg-black border border-matrix-text shadow-[0_0_20px_rgba(0,255,65,0.2)] z-50 animate-slide-in flex flex-col">
+                                <div class="bg-matrix-text text-black text-xs font-bold px-3 py-1 flex justify-between">
+                                    <span>SYSTEM_CONTROLS</span>
+                                    <span>[V.2.0]</span>
+                                </div>
+                                
+                                <button @click="chatSearch = !chatSearch; open=false" class="text-left px-4 py-3 text-sm text-matrix-text hover:bg-matrix-dark hover:text-matrix-highlight border-b border-matrix-dark flex items-center gap-3">
+                                    <i class="ri-search-eye-line"></i> SCAN_STREAM
+                                </button>
+                                
+                                <button @click="clearChat(); open=false" class="text-left px-4 py-3 text-sm text-matrix-text hover:bg-matrix-dark hover:text-matrix-highlight border-b border-matrix-dark flex items-center gap-3">
+                                    <i class="ri-delete-bin-5-line"></i> PURGE_LOGS
+                                </button>
+
+                                <template x-if="activeChat.type === 'group'">
+                                    <div>
+                                        <button @click="modals.groupMembers=true; open=false" class="w-full text-left px-4 py-3 text-sm text-matrix-text hover:bg-matrix-dark hover:text-matrix-highlight border-b border-matrix-dark flex items-center gap-3">
+                                            <i class="ri-group-line"></i> MEMBER_LIST
+                                        </button>
+                                        <button x-show="activeChat.role === 'admin'" @click="modals.addMember=true; loadAllUsers(); open=false" class="w-full text-left px-4 py-3 text-sm text-matrix-text hover:bg-matrix-dark hover:text-matrix-highlight border-b border-matrix-dark flex items-center gap-3">
+                                            <i class="ri-user-add-line"></i> ADD_NODE
+                                        </button>
+                                    </div>
+                                </template>
+                                
+                                <button @click="deleteChat(); open=false" class="text-left px-4 py-3 text-sm text-matrix-error hover:bg-matrix-error hover:text-black transition flex items-center gap-3 font-bold">
+                                    <i class="ri-shut-down-line"></i> TERMINATE_LINK
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- In-Chat Search Bar -->
+                    <div x-show="chatSearch" class="absolute bottom-0 left-0 right-0 translate-y-full bg-matrix-base border-b border-matrix-text p-2 flex items-center gap-2 z-40 animate-slide-in shadow-glow">
+                        <span class="text-matrix-text text-sm">SEARCH_QUERY:</span>
+                        <input x-model="chatSearchQuery" type="text" class="flex-1 bg-black border border-matrix-dark text-matrix-text px-2 py-1 text-sm font-mono focus:outline-none focus:border-matrix-text uppercase" placeholder="ENTER_KEYWORDS...">
+                        <button @click="chatSearch = false; chatSearchQuery = ''" class="text-matrix-error font-bold px-2">X</button>
+                    </div>
+
+                </div>
+            </template>
+
+            <!-- Messages -->
+            <div class="flex-1 overflow-y-auto min-h-0 p-4 space-y-4" id="messages-container" x-show="activeChat" 
+                 style="background-image: linear-gradient(rgba(0, 50, 0, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 50, 0, 0.1) 1px, transparent 1px); background-size: 20px 20px;">
+                
+                <template x-for="msg in messages" :key="msg.id">
+                    <div class="flex flex-col group animate-slide-in" :class="msg.sender_id === user.id ? 'items-end' : 'items-start'">
+                        
+                        <div class="flex gap-2 max-w-[80%]" :class="msg.sender_id === user.id ? 'flex-row-reverse' : ''">
+                             <!-- Sender Icon -->
+                             <div x-show="msg.sender_id !== user.id" class="w-6 h-6 border border-matrix-dim flex-shrink-0 cursor-pointer" @click="viewUserProfile(msg.sender_id)">
+                                 <img :src="avatar(msg.sender_dp, msg.sender_name)" class="w-full h-full grayscale object-cover">
+                             </div>
+
+                             <!-- Content Box (Matrix Data Block) -->
+                             <div class="relative p-4 text-xl font-matrix border transition-all duration-300 group hover:scale-[1.01] hover:shadow-[0_0_15px_var(--color-glow-dim)] overflow-hidden"
+                                  :class="msg.sender_id === user.id ? 'border-matrix-text bg-matrix-dark/10 text-matrix-text' : 'border-matrix-dim bg-black text-matrix-dim'">
+                                  
+                                  <!-- Hover Scanline Highlight -->
+                                  <div class="absolute inset-0 bg-matrix-text/5 translate-y-full group-hover:translate-y-0 transition-transform duration-500 ease-out pointer-events-none"></div>
+
+                                  <!-- Header / ID (Decoration) -->
+                                  <div class="flex justify-between items-center mb-2 pb-1 border-b border-dashed border-current opacity-50 text-[10px] tracking-widest">
+                                      <span>PACKET_ID: <span x-text="msg.id"></span></span>
+                                      <span x-text="msg.sender_id === user.id ? 'OUT' : 'IN'"></span>
+                                  </div>
+
+                                  <!-- Media -->
+                                  <template x-if="msg.file_url">
+                                     <div class="mb-4 border border-current p-1 bg-black/50 relative z-10">
+                                          <img x-show="msg.type === 'image'" :src="msg.file_url" class="max-w-full grayscale hover:grayscale-0 cursor-pointer" @click="viewMedia(msg.file_url)">
+                                          <video x-show="msg.type === 'video'" :src="msg.file_url" controls class="max-w-full grayscale hover:grayscale-0"></video>
+                                          <audio x-show="msg.type === 'audio'" :src="msg.file_url" controls class="h-8 w-full invert grayscale"></audio>
+                                          <a x-show="msg.type === 'file'" :href="msg.file_url" target="_blank" class="flex items-center gap-3 p-2 hover:bg-matrix-text hover:text-black transition">
+                                             <i class="ri-file-code-line text-lg"></i> <span class="text-sm uppercase">DOWNLOAD_DATA</span>
+                                          </a>
+                                     </div>
+                                  </template>
+
+                                  <!-- Main Text -->
+                                  <p x-text="msg.content" class="leading-relaxed break-words whitespace-pre-wrap tracking-wide relative z-10"></p>
+                                  
+                                  <!-- Reply Ref (Footer) -->
+                                  <div x-show="msg.reply_to" class="mt-3 pt-2 border-t border-current text-sm opacity-70 flex items-center gap-2 cursor-pointer hover:opacity-100 hover:text-matrix-highlight transition relative z-10" @click="scrollToMsg(msg.reply_to?.id)">
+                                      <span class="text-xs">[REF]</span>
+                                      <div class="flex-1 min-w-0 border-l-2 border-current pl-2">
+                                          <span class="uppercase font-bold text-xs block" x-text="msg.reply_to?.sender_name"></span>
+                                          <p class="truncate italic text-xs" x-text="msg.reply_to?.content || 'DATA_BLOCK'"></p>
+                                      </div>
+                                  </div>
+
+                                  <!-- Metadata Footer -->
+                                  <div class="mt-2 flex justify-end items-center gap-2 text-[10px] uppercase tracking-widest opacity-60 font-mono relative z-10">
+                                      <span x-text="formatTime(msg.timestamp)"></span>
+                                      <span x-show="msg.sender_id === user.id">
+                                          <span x-show="msg.status === 'sent'">[SENT]</span>
+                                          <span x-show="msg.status === 'read'" class="text-matrix-highlight shadow-glow">[ACK]</span>
+                                      </span>
+                                  </div>
+                             </div>
+                        </div>
+
+                        <!-- Action -->
+                        <button @click="startReply(msg)" class="text-[10px] text-matrix-dim uppercase hover:text-matrix-text opacity-0 group-hover:opacity-100 mt-1 transition">
+                            < REPLY_TO_BLOCK
+                        </button>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Input Console -->
+            <div class="p-4 border-t border-matrix-text bg-matrix-bg relative z-20 flex-shrink-0" x-show="activeChat">
+                
+                <div x-show="replyingTo" class="bg-matrix-dark text-matrix-text text-xs p-2 mb-2 border border-matrix-dim flex justify-between items-center animate-slide-in">
+                    <span>>> REPLYING_TO: <span x-text="replyingTo?.sender_name" class="font-bold"></span></span>
+                    <button @click="replyingTo = null">X</button>
+                </div>
+
+                <div class="flex items-end gap-2">
+                    <div class="flex flex-col gap-1">
+                         <button @click="document.getElementById('file-upload').click()" class="w-8 h-8 border border-matrix-dim text-matrix-dim hover:bg-matrix-text hover:text-black transition flex items-center justify-center" title="UPLOAD_FILE"><i class="ri-upload-cloud-2-line"></i></button>
+                         <button @click="document.getElementById('media-upload').click()" class="w-8 h-8 border border-matrix-dim text-matrix-dim hover:bg-matrix-text hover:text-black transition flex items-center justify-center" title="UPLOAD_MEDIA"><i class="ri-image-line"></i></button>
+                         <input type="file" id="file-upload" class="hidden" @change="uploadFile($event, 'file')">
+                         <input type="file" id="media-upload" class="hidden" accept="image/*,video/*" @change="uploadFile($event)">
+                    </div>
+
+                    <div class="flex-1 border-2 border-matrix-text bg-matrix-bg relative">
+                        <span class="absolute left-4 top-3 text-matrix-text select-none text-2xl">></span>
+                        <input x-model="messageInput" @keydown.enter="sendMessage()" @input="handleTyping()" type="text" class="w-full bg-transparent text-matrix-text font-mono pl-10 pr-4 py-4 focus:outline-none uppercase placeholder-matrix-dark text-2xl" placeholder="ENTER_COMMAND_OR_MESSAGE...">
+                    </div>
+
+                    <button @click="sendMessage()" class="h-16 px-8 border-2 border-matrix-text text-matrix-text hover:bg-matrix-text hover:text-black font-bold uppercase transition hover:shadow-glow text-xl" :disabled="!messageInput">
+                        SEND_
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SETTINGS PAGE (VIEW) -->
+    <div x-show="view === 'settings'" class="flex items-center justify-center h-full w-full bg-matrix-bg z-40 p-4 overflow-y-auto animate-slide-in">
+        <div class="w-full max-w-lg terminal-border bg-matrix-bg shadow-glow relative my-auto p-8">
+             <button @click="view = 'app'" class="absolute top-0 right-0 bg-matrix-text text-matrix-bg px-2 text-xs font-bold hover:bg-white">> BACK_TO_CONSOLE</button>
+             
+             <div class="text-center border-b border-matrix-dark pb-4 mb-6">
+                 <h1 class="text-3xl font-matrix text-matrix-text">USER_CONFIGURATION</h1>
+                 <p class="text-xs text-matrix-dim">>> EDIT_PROFILE_PARAMETERS</p>
+             </div>
+             
+             <!-- THEME SELECTOR -->
+             <div class="mb-8 border-b border-matrix-dark pb-6">
+                 <label class="text-xs text-matrix-text uppercase block mb-3">INTERFACE_THEME</label>
+                 <div class="grid grid-cols-2 gap-2">
+                     <button @click="setTheme('theme-matrix-green')" class="py-2 text-xs border border-matrix-dim text-[#00FF41] hover:bg-[#00FF41] hover:text-black transition uppercase">MATRIX_GREEN</button>
+                     <button @click="setTheme('theme-matrix-red')" class="py-2 text-xs border border-matrix-dim text-[#FF003C] hover:bg-[#FF003C] hover:text-black transition uppercase">MATRIX_RED</button>
+                     <button @click="setTheme('theme-matrix-blue')" class="py-2 text-xs border border-matrix-dim text-[#00E5FF] hover:bg-[#00E5FF] hover:text-black transition uppercase">MATRIX_BLUE</button>
+                     <button @click="setTheme('theme-cyberpunk')" class="py-2 text-xs border border-matrix-dim text-[#ff00ff] hover:bg-[#ff00ff] hover:text-black transition uppercase">CYBERPUNK</button>
+                     <button @click="setTheme('theme-light')" class="py-2 text-xs border border-matrix-dim text-white hover:bg-white hover:text-black transition uppercase">LIGHT_MODE</button>
+                     <button @click="setTheme('theme-dark')" class="py-2 text-xs border border-matrix-dim text-gray-400 hover:bg-gray-400 hover:text-black transition uppercase">DARK_MODE</button>
+                 </div>
+             </div>
+             
+             <div class="text-center mb-8">
+                 <div class="w-32 h-32 border-2 border-matrix-text mx-auto p-1 mb-2 relative group cursor-pointer">
+                     <img :src="avatar(user?.profile_image, user?.username)" class="w-full h-full grayscale object-cover">
+                     <label class="absolute inset-0 bg-black/80 flex items-center justify-center text-xs text-matrix-text opacity-0 group-hover:opacity-100 cursor-pointer border border-matrix-text">
+                         INIT_UPLOAD
+                         <input type="file" class="hidden" @change="(e) => { const file = e.target.files[0]; if(file) api.upload('/profile/upload-dp', file).then(res => { user.profile_image = res.url; alert('UPDATE_SUCCESS'); }); }">
+                     </label>
+                 </div>
+                 <p class="text-[10px] text-matrix-dim">AVATAR_PREVIEW</p>
+             </div>
+             
+             <div class="space-y-6">
+                 <div>
+                     <label class="text-xs text-matrix-text uppercase block mb-1">DESIGNATION [USERNAME]</label>
+                     <input x-model="user.username" type="text" class="w-full matrix-input p-3 text-lg uppercase">
+                 </div>
+                 <div>
+                     <label class="text-xs text-matrix-text uppercase block mb-1">BIO_DATA [ABOUT]</label>
+                     <input x-model="user.description" type="text" class="w-full matrix-input p-3 text-lg uppercase">
+                 </div>
+                 
+                 <div class="pt-4 flex gap-4">
+                     <button @click="view = 'app'" class="flex-1 py-3 text-matrix-dim border border-matrix-dim hover:text-matrix-error hover:border-matrix-error font-bold transition">CANCEL</button>
+                     <button @click="api.post('/profile/update', {username: user.username, description: user.description}).then(() => { alert('CONFIG_SAVED'); view = 'app'; })" class="flex-1 py-3 matrix-btn font-bold">
+                         > SAVE_CHANGES
+                     </button>
+                 </div>
+             </div>
+        </div>
+    </div>
+
+    <!-- CREATE GROUP PAGE (VIEW) -->
+    <div x-show="view === 'create_group'" class="flex items-center justify-center h-full w-full bg-matrix-bg z-40 p-4 overflow-y-auto animate-slide-in">
+        <div class="w-full max-w-2xl terminal-border bg-matrix-bg shadow-glow relative my-auto p-8 flex flex-col h-[80vh]">
+             <button @click="view = 'app'" class="absolute top-0 right-0 bg-matrix-text text-matrix-bg px-2 text-xs font-bold hover:bg-white">> BACK_TO_CONSOLE</button>
+             
+             <div class="border-b border-matrix-dark pb-4 mb-6">
+                 <h1 class="text-3xl font-matrix text-matrix-text">NEW_GROUP_PROTOCOL</h1>
+                 <p class="text-xs text-matrix-dim">>> INITIALIZE_MULTI_NODE_LINK</p>
+             </div>
+             
+             <div class="mb-6">
+                 <label class="text-xs text-matrix-text uppercase block mb-1">GROUP_ID [NAME]</label>
+                 <input x-model="groupForm.name" type="text" placeholder="ENTER_NAME..." class="w-full matrix-input p-3 text-lg uppercase">
+             </div>
+             
+             <p class="text-xs text-matrix-text uppercase mb-2">SELECT_NODES [MEMBERS]</p>
+             <div class="flex-1 overflow-y-auto border border-matrix-dark p-2 mb-6 bg-matrix-base/50">
+                 <template x-for="u in allUsers" :key="u.id">
+                    <div @click="toggleFriendSelection(u.id)" class="flex items-center gap-4 p-3 cursor-pointer border border-transparent hover:border-matrix-dim hover:bg-black transition mb-1" :class="groupForm.selectedFriends.includes(u.id) ? 'bg-matrix-dark border-matrix-dim' : ''">
+                        <div class="w-4 h-4 border border-matrix-text flex items-center justify-center"><div x-show="groupForm.selectedFriends.includes(u.id)" class="w-2 h-2 bg-matrix-text"></div></div>
+                        <div class="w-8 h-8 border border-matrix-dim p-0.5">
+                             <img :src="avatar(u.profile_image, u.username)" class="w-full h-full grayscale object-cover">
+                        </div>
+                        <span x-text="u.username" class="text-sm font-mono uppercase font-bold text-matrix-text"></span>
+                    </div>
+                </template>
+             </div>
+             
+             <div class="flex gap-4 mt-auto">
+                 <button @click="view = 'app'" class="flex-1 py-3 text-matrix-dim border border-matrix-dim hover:text-matrix-error hover:border-matrix-error font-bold">ABORT</button>
+                 <button @click="createGroup()" class="flex-1 py-3 matrix-btn font-bold">
+                     > EXECUTE_CREATE
+                 </button>
+             </div>
+        </div>
+    </div>
+
+    <!-- MODALS (Minor) -->
+    
+    <!-- Contacts List (Quick Access) -->
+    <div x-show="modals.contacts" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" x-transition.opacity>
+        <div class="w-full max-w-lg terminal-border bg-matrix-bg shadow-glow flex flex-col max-h-[80vh]" @click.outside="modals.contacts = false">
+             <div class="bg-matrix-text text-black px-4 py-2 font-bold flex justify-between items-center">
+                 <span>>> USER_DIRECTORY</span>
+                 <button @click="modals.contacts = false">X</button>
+             </div>
+             <div class="p-4 border-b border-matrix-dark">
+                 <input x-model="searchQuery" type="text" placeholder="SEARCH_DATABASE..." class="w-full bg-matrix-bg border border-matrix-dim text-matrix-text p-2 font-mono uppercase focus:outline-none focus:border-matrix-text">
+             </div>
+             <div class="flex-1 overflow-y-auto p-4 space-y-2">
+                 <template x-for="u in filteredUsers" :key="u.id">
+                    <div @click="startChatWith(u)" class="flex items-center gap-4 p-2 border border-matrix-dark hover:border-matrix-text cursor-pointer group transition">
+                         <div class="w-8 h-8 border border-matrix-dim p-0.5">
+                             <img :src="avatar(u.profile_image, u.username)" class="w-full h-full grayscale object-cover">
+                         </div>
+                         <div class="flex-1">
+                             <p class="text-sm font-bold text-matrix-text group-hover:bg-matrix-text group-hover:text-black inline px-1 transition" x-text="u.username"></p>
+                             <p class="text-xs text-matrix-dim font-mono mt-1" x-text="u.is_online ? '[ONLINE]' : '[OFFLINE]'"></p>
+                         </div>
+                         <button class="text-xs border border-matrix-dim px-2 py-1 text-matrix-dim group-hover:text-matrix-text group-hover:border-matrix-text">INIT_CHAT</button>
+                    </div>
+                 </template>
+             </div>
+        </div>
+    </div>
+    
+    <!-- Member List Modal -->
+    <div x-show="modals.groupMembers" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="w-full max-w-lg terminal-border bg-black shadow-glow flex flex-col max-h-[80vh]" @click.outside="modals.groupMembers = false">
+             <div class="bg-matrix-text text-black px-4 py-2 font-bold flex justify-between items-center">
+                 <span>>> NODE_LIST [MEMBERS]</span>
+                 <button @click="modals.groupMembers = false">X</button>
+             </div>
+             
+             <div class="flex-1 overflow-y-auto p-4 space-y-2">
+                 <template x-for="m in activeChat?.members" :key="m.id">
+                    <div class="flex items-center justify-between p-3 border border-matrix-dark hover:border-matrix-text transition">
+                        <div class="flex items-center gap-4 cursor-pointer" @click="viewUserProfile(m.id); modals.groupMembers=false">
+                            <div class="w-10 h-10 border border-matrix-dim p-0.5">
+                                <img :src="avatar(m.profile_image, m.username)" class="w-full h-full grayscale object-cover">
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-matrix-text uppercase" x-text="m.username"></p>
+                                <p class="text-[10px] text-matrix-dim font-mono" x-text="m.role === 'admin' ? '[PRIVILEGED_NODE]' : '[STANDARD_NODE]'"></p>
+                            </div>
+                        </div>
+                        
+                        <!-- Admin Actions -->
+                        <div x-show="activeChat.role === 'admin' && m.id !== user.id" class="flex gap-2">
+                            <button @click="api.post(`/groups/${activeChat.id}/kick`, {user_id: m.id}).then(()=>selectChat(activeChat))" class="text-[10px] border border-matrix-error text-matrix-error px-2 py-1 hover:bg-matrix-error hover:text-black transition">PURGE</button>
+                        </div>
+                    </div>
+                 </template>
+             </div>
+             
+             <div class="p-4 border-t border-matrix-dark text-right">
+                 <button @click="modals.groupMembers = false" class="text-xs text-matrix-dim hover:text-matrix-text uppercase">>> CLOSE_LIST</button>
+             </div>
+        </div>
+    </div>
+
+    <!-- Profile Modal (Quick View) -->
+    <div x-show="modals.viewProfile" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="w-full max-w-md terminal-border bg-matrix-bg p-6 relative shadow-glow text-center" @click.outside="modals.viewProfile = false">
+            <div class="absolute top-0 left-0 bg-matrix-text text-black text-xs px-2">TARGET_INFO</div>
+            <button @click="modals.viewProfile = false" class="absolute top-2 right-2 text-matrix-dim hover:text-matrix-text">CLOSE [X]</button>
+            
+            <div class="w-32 h-32 border-2 border-matrix-text mx-auto p-1 mb-4">
+                <img :src="avatar(viewingUser?.profile_image, viewingUser?.username)" class="w-full h-full grayscale object-cover">
+            </div>
+            
+            <h2 class="text-2xl font-bold text-matrix-text uppercase tracking-widest mb-2" x-text="viewingUser?.username"></h2>
+            <div class="inline-block border border-matrix-dim px-3 py-1 text-xs text-matrix-highlight font-mono mb-4">
+                STATUS: <span x-text="viewingUser?.is_online ? 'ACTIVE' : 'DORMANT'"></span>
+            </div>
+            
+            <p class="text-sm text-matrix-dim border-t border-b border-matrix-dark py-4 mb-6 font-mono" x-text="viewingUser?.description || 'NO_DATA_AVAILABLE'"></p>
+            
+            <button @click="startChatWith(viewingUser); modals.viewProfile=false" class="w-full matrix-btn py-3 font-bold">
+                > ESTABLISH_LINK
+            </button>
+        </div>
+    </div>
+
+    <!-- Member List Modal -->
+    <div x-show="modals.groupMembers" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="w-full max-w-lg terminal-border bg-black shadow-glow flex flex-col max-h-[80vh]" @click.outside="modals.groupMembers = false">
+             <div class="bg-matrix-text text-black px-4 py-2 font-bold flex justify-between items-center">
+                 <span>>> NODE_LIST [MEMBERS]</span>
+                 <button @click="modals.groupMembers = false">X</button>
+             </div>
+             
+             <div class="flex-1 overflow-y-auto p-4 space-y-2">
+                 <template x-for="m in activeChat?.members" :key="m.id">
+                    <div class="flex items-center justify-between p-3 border border-matrix-dark hover:border-matrix-text transition">
+                        <div class="flex items-center gap-4 cursor-pointer" @click="viewUserProfile(m.id); modals.groupMembers=false">
+                            <div class="w-10 h-10 border border-matrix-dim p-0.5">
+                                <img :src="avatar(m.profile_image, m.username)" class="w-full h-full grayscale object-cover">
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-matrix-text uppercase" x-text="m.username"></p>
+                                <p class="text-[10px] text-matrix-dim font-mono" x-text="m.role === 'admin' ? '[PRIVILEGED_NODE]' : '[STANDARD_NODE]'"></p>
+                            </div>
+                        </div>
+                        
+                        <!-- Admin Actions -->
+                        <div x-show="activeChat.role === 'admin' && m.id !== user.id" class="flex gap-2">
+                            <button @click="api.post(`/groups/${activeChat.id}/kick`, {user_id: m.id}).then(()=>selectChat(activeChat))" class="text-[10px] border border-matrix-error text-matrix-error px-2 py-1 hover:bg-matrix-error hover:text-black transition">PURGE</button>
+                        </div>
+                    </div>
+                 </template>
+             </div>
+             
+             <div class="p-4 border-t border-matrix-dark text-right">
+                 <button @click="modals.groupMembers = false" class="text-xs text-matrix-dim hover:text-matrix-text uppercase">>> CLOSE_LIST</button>
+             </div>
+        </div>
+    </div>
+
+</body>
+</html>
